@@ -11,10 +11,12 @@ class Hla(HighLevelAnalyzer):
     my_number_setting = NumberSetting(min_value=0, max_value=100)
     my_choices_setting = ChoicesSetting(choices=('A', 'B'))
 
+    byte_cnt = 0
+
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
         'mytype': {
-            'format': 'Output type: {{type}}, Input type: {{data.input_type}}'
+            'format': '{{data.string}}'
         }
     }
 
@@ -24,18 +26,41 @@ class Hla(HighLevelAnalyzer):
 
         Settings can be accessed using the same name used above.
         '''
+        t = int("0x53", 0)
+        print('t: ', t)
 
-        print("Settings:", self.my_string_setting,
+        print("OSDP settings:", self.my_string_setting,
               self.my_number_setting, self.my_choices_setting)
 
     def decode(self, frame: AnalyzerFrame):
-        '''
-        Process a frame from the input analyzer, and optionally return a single `AnalyzerFrame` or a list of `AnalyzerFrame`s.
+        try:
+            ch = frame.data['data']
+        except:
+            # Not an ASCII character
+            return
 
-        The type and data values in `frame` will depend on the input analyzer.
-        '''
+        print('ch: ', ch)
+        if self.byte_cnt == 0:
+            print('SOM search...')
+            if ch == b'\x53':
+                self.byte_cnt = 1
+                print(self.byte_cnt)
+                return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
+                    'string': 'SOM'
+                })
+            else:
+                return
+        elif self.byte_cnt == 1:
+            self.byte_cnt += 1
+            return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
+                'string': 'ADDR'
+            })
+        else:
+            self.byte_cnt += 1
+            print(self.byte_cnt)
+            return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
+                'string': str(self.byte_cnt)
+            })
 
-        # Return the data frame itself
-        return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
-            'input_type': frame.type
-        })
+
+
