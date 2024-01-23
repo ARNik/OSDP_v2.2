@@ -12,6 +12,8 @@ class Hla(HighLevelAnalyzer):
     my_choices_setting = ChoicesSetting(choices=('A', 'B'))
 
     byte_cnt = 0
+    len_lsb = 0
+    len_start_time = 0
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -21,14 +23,6 @@ class Hla(HighLevelAnalyzer):
     }
 
     def __init__(self):
-        '''
-        Initialize HLA.
-
-        Settings can be accessed using the same name used above.
-        '''
-        t = int("0x53", 0)
-        print('t: ', t)
-
         print("OSDP settings:", self.my_string_setting,
               self.my_number_setting, self.my_choices_setting)
 
@@ -39,28 +33,35 @@ class Hla(HighLevelAnalyzer):
             # Not an ASCII character
             return
 
-        print('ch: ', ch)
+        msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {})
+
         if self.byte_cnt == 0:
             print('SOM search...')
             if ch == b'\x53':
-                self.byte_cnt = 1
-                print(self.byte_cnt)
-                return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
-                    'string': 'SOM'
-                })
+                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'SOM'})
             else:
                 return
         elif self.byte_cnt == 1:
+            addr = 'ADDR: ' + str(ch[0])
+            print(addr)
+            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': addr})
+        elif self.byte_cnt == 2:
+            self.len_lsb = ch[0]
+            self.len_start_time = frame.start_time
             self.byte_cnt += 1
-            return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
-                'string': 'ADDR'
-            })
+            return
+            # msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'LEN_LSB'})
+        elif self.byte_cnt == 3:
+            len = 'LEN: ' + str(self.len_lsb + ch[0])
+            print(len)
+            msg = AnalyzerFrame('mytype', self.len_start_time, frame.end_time, {'string': len})
+        elif self.byte_cnt == 4:
+            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'CTRL'})
         else:
-            self.byte_cnt += 1
-            print(self.byte_cnt)
-            return AnalyzerFrame('mytype', frame.start_time, frame.end_time, {
-                'string': str(self.byte_cnt)
-            })
+            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt)})
+
+        self.byte_cnt += 1
+        return msg
 
 
 
