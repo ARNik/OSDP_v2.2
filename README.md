@@ -1,7 +1,7 @@
 
 # OSDP v2.2 analyzer
 
-This HLA parse OSDP v2.2 massages. 
+This HLA parses OSDP v2.2 messages. 
 
 ![Alt text](img/1.jpg)
 
