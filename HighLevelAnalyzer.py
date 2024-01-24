@@ -31,7 +31,7 @@ class Hla(HighLevelAnalyzer):
 
     def decode(self, frame: AnalyzerFrame):
         try:
-            ch = frame.data['data']
+            ch = frame.data['data'][0]
         except:
             # Not an ASCII character
             return
@@ -40,32 +40,32 @@ class Hla(HighLevelAnalyzer):
 
         if self.byte_cnt == 0:
             print('SOM search...')
-            if ch == b'\x53':
+            if ch == 0x53:
                 msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'SOM'})
             else:
                 return
         elif self.byte_cnt == 1:
-            addr = 'ADDR: ' + str(ch[0])
+            addr = 'ADDR: ' + str(ch)
             print(addr)
             msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': addr})
         elif self.byte_cnt == 2:
-            self.pkt_len_lsb = ch[0]
+            self.pkt_len_lsb = ch
             self.pkt_len_start_time = frame.start_time
             self.byte_cnt += 1
             return
         elif self.byte_cnt == 3:
-            self.pkt_len = self.pkt_len_lsb + ch[0]
+            self.pkt_len = self.pkt_len_lsb + ch
             len = 'LEN: ' + str(self.pkt_len)
             print(len)
             msg = AnalyzerFrame('mytype', self.pkt_len_start_time, frame.end_time, {'string': len})
         elif self.byte_cnt == 4:
-            sqn = ch[0] & 3
-            self.pkt_sum = ch[0] & 4
+            sqn = ch & 3
+            self.pkt_sum = ch & 4
             if self.pkt_sum:
                 sum = 'CRC'
             else:
                 sum = 'CHECKSUM'
-            self.pkt_scb = ch[0] & 8
+            self.pkt_scb = ch & 8
             if self.pkt_scb:
                 scb = 'SCB'
             else:
@@ -78,7 +78,7 @@ class Hla(HighLevelAnalyzer):
                 msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
             else:
                 if self.byte_cnt == 5:
-                    msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': self.GetCmdReplyCode(ch[0])})
+                    msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': self.GetCmdReplyCode(ch)})
                 else:
                     msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
 
