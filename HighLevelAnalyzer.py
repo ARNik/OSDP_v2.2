@@ -6,17 +6,12 @@ from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, StringSetting, Nu
 
 # High level analyzers must subclass the HighLevelAnalyzer class.
 class Hla(HighLevelAnalyzer):
-    # List of settings that a user can set for this High Level Analyzer.
-    my_string_setting = StringSetting()
-    my_number_setting = NumberSetting(min_value=0, max_value=100)
-    my_choices_setting = ChoicesSetting(choices=('A', 'B'))
 
-    byte_cnt = 0
-    pkt_len_lsb = 0
-    pkt_len_start_time = 0
-    pkt_len = 0
-    pkt_sum = ''
-    pkt_scb = ''
+    byte_cnt = 0            # byte counter for the current packet
+    pkt_start_time = 0      # for storing packet start times for multibyte messages
+    pkt_len = 0             # current packet length
+    pkt_crc = False         # if current packet has crc (or checksum)
+    pkt_scb = False         # if current packet has Security Control Block
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -26,8 +21,7 @@ class Hla(HighLevelAnalyzer):
     }
 
     def __init__(self):
-        print("OSDP settings:", self.my_string_setting,
-              self.my_number_setting, self.my_choices_setting)
+        print('Init')
 
     def decode(self, frame: AnalyzerFrame):
         try:
@@ -39,8 +33,8 @@ class Hla(HighLevelAnalyzer):
         msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {})
 
         if self.byte_cnt == 0:
-            print('SOM search...')
             if ch == 0x53:
+                print('SOM')
                 msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'SOM'})
             else:
                 return
@@ -49,23 +43,23 @@ class Hla(HighLevelAnalyzer):
             print(addr)
             msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': addr})
         elif self.byte_cnt == 2:
-            self.pkt_len_lsb = ch
-            self.pkt_len_start_time = frame.start_time
+            self.pkt_len = ch
+            self.pkt_start_time = frame.start_time
             self.byte_cnt += 1
             return
         elif self.byte_cnt == 3:
-            self.pkt_len = self.pkt_len_lsb + ch
+            self.pkt_len = self.pkt_len + (ch << 8)
             len = 'LEN: ' + str(self.pkt_len)
             print(len)
-            msg = AnalyzerFrame('mytype', self.pkt_len_start_time, frame.end_time, {'string': len})
+            msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': len})
         elif self.byte_cnt == 4:
             sqn = ch & 3
-            self.pkt_sum = ch & 4
-            if self.pkt_sum:
+            self.pkt_crc = bool(ch & 4)
+            if self.pkt_crc:
                 sum = 'CRC'
             else:
                 sum = 'CHECKSUM'
-            self.pkt_scb = ch & 8
+            self.pkt_scb = bool(ch & 8)
             if self.pkt_scb:
                 scb = 'SCB'
             else:
@@ -77,10 +71,20 @@ class Hla(HighLevelAnalyzer):
             if self.pkt_scb:
                 msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
             else:
-                if self.byte_cnt == 5:
+                if self.byte_cnt == 5:  # if cmd/reply byte
                     msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': self.GetCmdReplyCode(ch)})
                 else:
-                    msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
+                    # print('sum: ', str(self.pkt_crc), ' cnt: ', self.byte_cnt, ' len: ', self.pkt_len)
+                    if self.pkt_crc and self.byte_cnt == (self.pkt_len - 2):
+                        self.pkt_start_time = frame.start_time
+                        self.byte_cnt += 1
+                        return
+                    elif self.pkt_crc and self.byte_cnt == (self.pkt_len - 1):
+                        msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': 'CRC'})
+                    elif not self.pkt_crc and self.byte_cnt == (self.pkt_len - 1):
+                        msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'CHECKSUM'})
+                    else:
+                        msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
 
         self.byte_cnt += 1
 
@@ -94,7 +98,6 @@ class Hla(HighLevelAnalyzer):
 
     def GetCmdReplyCode(self, cmd):
         # Commands                              # Meaning (Data)
-
         if cmd == 0x60:  return 'POLL'          # Poll (None)
         if cmd == 0x61:  return 'ID'            # ID Report Request (id type)
         if cmd == 0x62:  return 'CAP'           # PD Capabilities Request (Reply type)
