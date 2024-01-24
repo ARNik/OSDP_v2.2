@@ -12,9 +12,11 @@ class Hla(HighLevelAnalyzer):
     my_choices_setting = ChoicesSetting(choices=('A', 'B'))
 
     byte_cnt = 0
-    len_lsb = 0
-    len_start_time = 0
-    len_all = 0
+    pkt_len_lsb = 0
+    pkt_len_start_time = 0
+    pkt_len = 0
+    pkt_sum = ''
+    pkt_scb = ''
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -47,26 +49,37 @@ class Hla(HighLevelAnalyzer):
             print(addr)
             msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': addr})
         elif self.byte_cnt == 2:
-            self.len_lsb = ch[0]
-            self.len_start_time = frame.start_time
+            self.pkt_len_lsb = ch[0]
+            self.pkt_len_start_time = frame.start_time
             self.byte_cnt += 1
             return
-            # msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'LEN_LSB'})
         elif self.byte_cnt == 3:
-            self.len_all = self.len_lsb + ch[0]
-            len = 'LEN: ' + str(self.len_all)
+            self.pkt_len = self.pkt_len_lsb + ch[0]
+            len = 'LEN: ' + str(self.pkt_len)
             print(len)
-            msg = AnalyzerFrame('mytype', self.len_start_time, frame.end_time, {'string': len})
+            msg = AnalyzerFrame('mytype', self.pkt_len_start_time, frame.end_time, {'string': len})
         elif self.byte_cnt == 4:
-            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'CTRL'})
+            sqn = ch[0] & 3
+            self.pkt_sum = ch[0] & 4
+            if self.pkt_sum:
+                sum = 'CRC'
+            else:
+                sum = 'CHECKSUM'
+            self.pkt_scb = ch[0] & 8
+            if self.pkt_scb:
+                scb = 'SCB'
+            else:
+                scb = 'noSCB'
+            ctrl = 'CTRL (' + 'SQN: ' + str(sqn) + ', ' + sum + ', ' + scb + ')'
+            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': ctrl})
         else:
             msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
 
         self.byte_cnt += 1
 
-        if self.len_all > 0:
-            if self.len_all == self.byte_cnt:
-                self.len_all = 0
+        if self.pkt_len > 0:
+            if self.pkt_len == self.byte_cnt:
+                self.pkt_len = 0
                 self.byte_cnt = 0
 
         return msg
