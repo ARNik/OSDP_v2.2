@@ -14,6 +14,7 @@ class Hla(HighLevelAnalyzer):
     byte_cnt = 0
     len_lsb = 0
     len_start_time = 0
+    len_all = 0
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -52,15 +53,22 @@ class Hla(HighLevelAnalyzer):
             return
             # msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'LEN_LSB'})
         elif self.byte_cnt == 3:
-            len = 'LEN: ' + str(self.len_lsb + ch[0])
+            self.len_all = self.len_lsb + ch[0]
+            len = 'LEN: ' + str(self.len_all)
             print(len)
             msg = AnalyzerFrame('mytype', self.len_start_time, frame.end_time, {'string': len})
         elif self.byte_cnt == 4:
             msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'CTRL'})
         else:
-            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt)})
+            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
 
         self.byte_cnt += 1
+
+        if self.len_all > 0:
+            if self.len_all == self.byte_cnt:
+                self.len_all = 0
+                self.byte_cnt = 0
+
         return msg
 
 
