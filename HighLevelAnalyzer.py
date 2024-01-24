@@ -49,6 +49,9 @@ class Hla(HighLevelAnalyzer):
             return
         elif self.byte_cnt == 3:
             self.pkt_len = self.pkt_len + (ch << 8)
+            if self.pkt_len > 1440:
+                self.byte_cnt = 0
+                return
             len = 'LEN: ' + str(self.pkt_len)
             print(len)
             msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': len})
