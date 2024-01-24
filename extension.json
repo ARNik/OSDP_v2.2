@@ -2,7 +2,7 @@
   "name": "OSDP v2.2",
   "apiVersion": "1.0.0",
   "author": "ARNik",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "OSDP v2.2 analyzer",
   "extensions": {
     "OSDP v2.2": {
