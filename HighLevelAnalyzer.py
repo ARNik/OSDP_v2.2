@@ -12,6 +12,9 @@ class Hla(HighLevelAnalyzer):
     pkt_len = 0             # current packet length
     pkt_crc = False         # if current packet has crc (or checksum)
     pkt_scb = False         # if current packet has Security Control Block
+    pkt_cmd = ''            # current command
+    pd_sn = 0               # pd serial number
+    pd_fw_version = ''      # pd firmware version
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -75,7 +78,9 @@ class Hla(HighLevelAnalyzer):
                 msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
             else:
                 if self.byte_cnt == 5:  # if cmd/reply byte
-                    msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': self.GetCmdReplyCode(ch)})
+                    self.pkt_cmd = self.GetCmdReplyCode(ch)
+                    print(self.pkt_cmd)
+                    msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': self.pkt_cmd})
                 else:
                     # print('sum: ', str(self.pkt_crc), ' cnt: ', self.byte_cnt, ' len: ', self.pkt_len)
                     if self.pkt_crc and self.byte_cnt == (self.pkt_len - 2):
@@ -87,7 +92,69 @@ class Hla(HighLevelAnalyzer):
                     elif not self.pkt_crc and self.byte_cnt == (self.pkt_len - 1):
                         msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'CHECKSUM'})
                     else:
-                        msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
+                        # Command/Reply parsing
+                        if self.pkt_cmd == 'ID':
+                            if ch == 0x00:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Standard'})
+                            else:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Unknown'})
+                        elif self.pkt_cmd == 'CAP':
+                            if ch == 0x00:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Standard'})
+                            else:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Unknown'})
+                        elif self.pkt_cmd == 'PDID':
+                            if self.byte_cnt == 6:
+                                self.pkt_start_time = frame.start_time
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 7:
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 8:
+                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': 'Vendor Code'})
+                            elif self.byte_cnt == 9:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Model'})
+                            elif self.byte_cnt == 10:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Version'})
+                            elif self.byte_cnt == 11:
+                                self.pd_sn = ch
+                                self.pkt_start_time = frame.start_time
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 12:
+                                self.pd_sn += (ch << 8)
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 13:
+                                self.pd_sn += (ch << 16)
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 14:
+                                self.pd_sn += (ch << 24)
+                                sn = 'SN: ' + str(self.pd_sn)
+                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': sn})
+                            elif self.byte_cnt == 15:
+                                self.pd_fw_version = 'FW: v' + str(ch)
+                                self.pkt_start_time = frame.start_time
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 16:
+                                self.pd_fw_version += '.' + str(ch)
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 17:
+                                self.pd_fw_version += '.' + str(ch)
+                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': self.pd_fw_version})
+                        elif self.pkt_cmd == 'LSTATR':
+                            if ch == 0x00:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Normal'})
+                            elif ch == 0x01 and self.byte_cnt == 6:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'tamper'})
+                            elif ch == 0x01 and self.byte_cnt == 7:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'power'})
+                            else:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Unknown'})
 
         self.byte_cnt += 1
 
