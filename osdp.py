@@ -5,7 +5,7 @@ from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, StringSetting, Nu
 
 
 # High level analyzers must subclass the HighLevelAnalyzer class.
-class Hla(HighLevelAnalyzer):
+class OSDP_Analyzer(HighLevelAnalyzer):
 
     byte_cnt = 0            # byte counter for the current packet
     pkt_start_time = 0      # for storing packet start times for multibyte messages

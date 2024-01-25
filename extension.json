@@ -7,7 +7,7 @@
   "extensions": {
     "OSDP v2.2": {
       "type": "HighLevelAnalyzer",
-      "entryPoint": "HighLevelAnalyzer.Hla"
+      "entryPoint": "osdp.OSDP_Analyzer"
     }
   }
 }
