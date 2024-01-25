@@ -43,7 +43,13 @@ class Hla(HighLevelAnalyzer):
             else:
                 return
         elif self.byte_cnt == 1:
-            addr = 'ADDR: ' + str(ch)
+            addr = 'ADDR: '
+            if (ch & 0x7F) == 0x7F:
+                addr += 'BROADCAST'
+            else:
+                addr += str(ch & 0x7F)
+            if (ch & 0x80):
+                addr += ' REPLY'
             print(addr)
             msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': addr})
         elif self.byte_cnt == 2:
