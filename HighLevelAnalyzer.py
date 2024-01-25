@@ -15,6 +15,7 @@ class Hla(HighLevelAnalyzer):
     pkt_cmd = ''            # current command
     pd_sn = 0               # pd serial number
     pd_fw_version = ''      # pd firmware version
+    pd_cap_msg = ''         # pd capability for PDCAP parsing
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -146,6 +147,19 @@ class Hla(HighLevelAnalyzer):
                             elif self.byte_cnt == 17:
                                 self.pd_fw_version += '.' + str(ch)
                                 msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': self.pd_fw_version})
+                        elif self.pkt_cmd == 'PDCAP':
+                            if (self.byte_cnt % 3) == 0:
+                                self.pd_cap_msg = self.PDCAPparse(ch)
+                                self.pkt_start_time = frame.start_time
+                                self.byte_cnt += 1
+                                return
+                            elif (self.byte_cnt % 3) == 1:
+                                self.byte_cnt += 1
+                                return
+                            elif (self.byte_cnt % 3) == 2:
+                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': self.pd_cap_msg})
+                            else:
+                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'PDCAP parsing error'})
                         elif self.pkt_cmd == 'LSTATR':
                             if ch == 0x00:
                                 msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Normal'})
@@ -222,4 +236,43 @@ class Hla(HighLevelAnalyzer):
         if cmd == 0x90:  return 'MFGREP'        # Manufacturer Specific Reply (Any)
         if cmd == 0xB1:  return 'XRD'           # Extended Read Response (APDU and details)
         return 'Unknown'
+    
+
+    def PDCAPparse(self, fn_code):
+        res = ''
+        if fn_code == 1:
+            res += 'Contact Status Monitoring'
+        elif fn_code == 2:
+            res += 'Output Control'
+        elif fn_code == 3:
+            res += 'Card Data Format'
+        elif fn_code == 4:
+            res += 'Reader LED Control'
+        elif fn_code == 5:
+            res += 'Reader Audible Output'
+        elif fn_code == 6:
+            res += 'Reader Text Output'
+        elif fn_code == 7:
+            res += 'Time Keeping'
+        elif fn_code == 8:
+            res += 'Check Character Support'
+        elif fn_code == 9:
+            res += 'Communication Security'
+        elif fn_code == 10:
+            res += 'Receive BufferSize'
+        elif fn_code == 11:
+            res += 'Largest Combined Message Size'
+        elif fn_code == 12:
+            res += 'Smart Card Support'
+        elif fn_code == 13:
+            res += 'Readers'
+        elif fn_code == 14:
+            res += 'Biometrics'
+        elif fn_code == 15:
+            res += 'Secure PIN Entry support'
+        elif fn_code == 16:
+            res += 'OSDP Version'
+        else:
+            res += 'Unkonwn'
+        return res
 
