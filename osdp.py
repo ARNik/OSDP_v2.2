@@ -8,18 +8,18 @@ from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, StringSetting, Nu
 class OSDP_Analyzer(HighLevelAnalyzer):
 
     byte_cnt = 0            # byte counter for the current packet
-    pkt_start_time = 0      # for storing packet start times for multibyte messages
+    pkt_start_time = None   # for storing packet start times for multibyte messages
     pkt_len = 0             # current packet length
-    pkt_crc = False         # if current packet has crc (or checksum)
-    pkt_scb = False         # if current packet has Security Control Block
-    pkt_cmd = ''            # current command
-    pd_sn = 0               # pd serial number
-    pd_fw_version = ''      # pd firmware version
-    pd_cap_msg = ''         # pd capability for PDCAP parsing
+    pkt_crc = None          # if current packet has crc (or checksum)
+    pkt_scb = None          # if current packet has Security Control Block
+    pkt_cmd = None          # current command
+    pd_sn = None            # pd serial number
+    pd_fw_version = None    # pd firmware version
+    pd_cap_msg = None       # pd capability for PDCAP parsing
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
-        'mytype': {
+        'OSDP': {
             'format': '{{data.string}}'
         }
     }
@@ -34,12 +34,12 @@ class OSDP_Analyzer(HighLevelAnalyzer):
             # Not an ASCII character
             return
 
-        msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {})
+        msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {})
 
         if self.byte_cnt == 0:
             if ch == 0x53:
                 print('SOM')
-                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'SOM'})
+                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'SOM'})
             else:
                 return
         elif self.byte_cnt == 1:
@@ -51,7 +51,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
             if (ch & 0x80):
                 addr += ' REPLY'
             print(addr)
-            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': addr})
+            msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': addr})
         elif self.byte_cnt == 2:
             self.pkt_len = ch
             self.pkt_start_time = frame.start_time
@@ -64,7 +64,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                 return
             len = 'LEN: ' + str(self.pkt_len)
             print(len)
-            msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': len})
+            msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': len})
         elif self.byte_cnt == 4:
             sqn = ch & 3
             self.pkt_crc = bool(ch & 4)
@@ -78,16 +78,16 @@ class OSDP_Analyzer(HighLevelAnalyzer):
             else:
                 scb = 'noSCB'
             ctrl = 'CTRL (' + 'SQN: ' + str(sqn) + ', ' + sum + ', ' + scb + ')'
-            msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': ctrl})
+            msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': ctrl})
         else:
             # Header parsed
             if self.pkt_scb:
-                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
+                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': str(self.byte_cnt + 1)})
             else:
                 if self.byte_cnt == 5:  # if cmd/reply byte
                     self.pkt_cmd = self.GetCmdReplyCode(ch)
                     print(self.pkt_cmd)
-                    msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': self.pkt_cmd})
+                    msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': self.pkt_cmd})
                 else:
                     # print('sum: ', str(self.pkt_crc), ' cnt: ', self.byte_cnt, ' len: ', self.pkt_len)
                     if self.pkt_crc and self.byte_cnt == (self.pkt_len - 2):
@@ -95,21 +95,21 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                         self.byte_cnt += 1
                         return
                     elif self.pkt_crc and self.byte_cnt == (self.pkt_len - 1):
-                        msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': 'CRC'})
+                        msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': 'CRC'})
                     elif not self.pkt_crc and self.byte_cnt == (self.pkt_len - 1):
-                        msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'CHECKSUM'})
+                        msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'CHECKSUM'})
                     else:
                         # Command/Reply parsing
                         if self.pkt_cmd == 'ID':
                             if ch == 0x00:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Standard'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Standard'})
                             else:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Unknown'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Unknown'})
                         elif self.pkt_cmd == 'CAP':
                             if ch == 0x00:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Standard'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Standard'})
                             else:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Unknown'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Unknown'})
                         elif self.pkt_cmd == 'PDID':
                             if self.byte_cnt == 6:
                                 self.pkt_start_time = frame.start_time
@@ -119,11 +119,11 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                                 self.byte_cnt += 1
                                 return
                             elif self.byte_cnt == 8:
-                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': 'Vendor Code'})
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': 'Vendor Code'})
                             elif self.byte_cnt == 9:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Model'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Model'})
                             elif self.byte_cnt == 10:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Version'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Version'})
                             elif self.byte_cnt == 11:
                                 self.pd_sn = ch
                                 self.pkt_start_time = frame.start_time
@@ -140,7 +140,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                             elif self.byte_cnt == 14:
                                 self.pd_sn += (ch << 24)
                                 sn = 'SN: ' + str(self.pd_sn)
-                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': sn})
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': sn})
                             elif self.byte_cnt == 15:
                                 self.pd_fw_version = 'FW: v' + str(ch)
                                 self.pkt_start_time = frame.start_time
@@ -152,7 +152,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                                 return
                             elif self.byte_cnt == 17:
                                 self.pd_fw_version += '.' + str(ch)
-                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': self.pd_fw_version})
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': self.pd_fw_version})
                         elif self.pkt_cmd == 'PDCAP':
                             if (self.byte_cnt % 3) == 0:
                                 self.pd_cap_msg = self.PDCAPparse(ch)
@@ -163,18 +163,18 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                                 self.byte_cnt += 1
                                 return
                             elif (self.byte_cnt % 3) == 2:
-                                msg = AnalyzerFrame('mytype', self.pkt_start_time, frame.end_time, {'string': self.pd_cap_msg})
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': self.pd_cap_msg})
                             else:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'PDCAP parsing error'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'PDCAP parsing error'})
                         elif self.pkt_cmd == 'LSTATR':
                             if ch == 0x00:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Normal'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Normal'})
                             elif ch == 0x01 and self.byte_cnt == 6:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'tamper'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'tamper'})
                             elif ch == 0x01 and self.byte_cnt == 7:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'power'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'power'})
                             else:
-                                msg = AnalyzerFrame('mytype', frame.start_time, frame.end_time, {'string': 'Unknown'})
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Unknown'})
 
         self.byte_cnt += 1
 
@@ -245,40 +245,22 @@ class OSDP_Analyzer(HighLevelAnalyzer):
     
 
     def PDCAPparse(self, fn_code):
-        res = ''
-        if fn_code == 1:
-            res += 'Contact Status Monitoring'
-        elif fn_code == 2:
-            res += 'Output Control'
-        elif fn_code == 3:
-            res += 'Card Data Format'
-        elif fn_code == 4:
-            res += 'Reader LED Control'
-        elif fn_code == 5:
-            res += 'Reader Audible Output'
-        elif fn_code == 6:
-            res += 'Reader Text Output'
-        elif fn_code == 7:
-            res += 'Time Keeping'
-        elif fn_code == 8:
-            res += 'Check Character Support'
-        elif fn_code == 9:
-            res += 'Communication Security'
-        elif fn_code == 10:
-            res += 'Receive BufferSize'
-        elif fn_code == 11:
-            res += 'Largest Combined Message Size'
-        elif fn_code == 12:
-            res += 'Smart Card Support'
-        elif fn_code == 13:
-            res += 'Readers'
-        elif fn_code == 14:
-            res += 'Biometrics'
-        elif fn_code == 15:
-            res += 'Secure PIN Entry support'
-        elif fn_code == 16:
-            res += 'OSDP Version'
-        else:
-            res += 'Unkonwn'
-        return res
+        if fn_code == 1:  return 'Contact Status Monitoring'
+        if fn_code == 2:  return 'Output Control'
+        if fn_code == 3:  return 'Card Data Format'
+        if fn_code == 4:  return 'Reader LED Control'
+        if fn_code == 5:  return 'Reader Audible Output'
+        if fn_code == 6:  return 'Reader Text Output'
+        if fn_code == 7:  return 'Time Keeping'
+        if fn_code == 8:  return 'Check Character Support'
+        if fn_code == 9:  return 'Communication Security'
+        if fn_code == 10: return 'Receive BufferSize'
+        if fn_code == 11: return 'Largest Combined Message Size'
+        if fn_code == 12: return 'Smart Card Support'
+        if fn_code == 13: return 'Readers'
+        if fn_code == 14: return 'Biometrics'
+        if fn_code == 15: return 'Secure PIN Entry support'
+        if fn_code == 16: return 'OSDP Version'
+        return 'Unkonwn'
+
 
