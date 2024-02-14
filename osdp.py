@@ -13,9 +13,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
     pkt_crc = None          # if current packet has crc (or checksum)
     pkt_scb = None          # if current packet has Security Control Block
     pkt_cmd = None          # current command
-    pd_sn = None            # pd serial number
-    pd_fw_version = None    # pd firmware version
-    pd_cap_msg = None       # pd capability for PDCAP parsing
+    tmp = None              # variable for termorary storage between decode() runnings
 
     # An optional list of types this analyzer produces, providing a way to customize the way frames are displayed in Logic 2.
     result_types = {
@@ -125,37 +123,37 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                             elif self.byte_cnt == 10:
                                 msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Version'})
                             elif self.byte_cnt == 11:
-                                self.pd_sn = ch
+                                self.tmp = ch
                                 self.pkt_start_time = frame.start_time
                                 self.byte_cnt += 1
                                 return
                             elif self.byte_cnt == 12:
-                                self.pd_sn += (ch << 8)
+                                self.tmp += (ch << 8)
                                 self.byte_cnt += 1
                                 return
                             elif self.byte_cnt == 13:
-                                self.pd_sn += (ch << 16)
+                                self.tmp += (ch << 16)
                                 self.byte_cnt += 1
                                 return
                             elif self.byte_cnt == 14:
-                                self.pd_sn += (ch << 24)
-                                sn = 'SN: ' + str(self.pd_sn)
+                                self.tmp += (ch << 24)
+                                sn = 'SN: ' + str(self.tmp)
                                 msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': sn})
                             elif self.byte_cnt == 15:
-                                self.pd_fw_version = 'FW: v' + str(ch)
+                                self.tmp = 'FW: v' + str(ch)
                                 self.pkt_start_time = frame.start_time
                                 self.byte_cnt += 1
                                 return
                             elif self.byte_cnt == 16:
-                                self.pd_fw_version += '.' + str(ch)
+                                self.tmp += '.' + str(ch)
                                 self.byte_cnt += 1
                                 return
                             elif self.byte_cnt == 17:
-                                self.pd_fw_version += '.' + str(ch)
-                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': self.pd_fw_version})
+                                self.tmp += '.' + str(ch)
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': self.tmp})
                         elif self.pkt_cmd == 'PDCAP':
                             if (self.byte_cnt % 3) == 0:
-                                self.pd_cap_msg = self.PDCAPparse(ch)
+                                self.tmp = self.PDCAPparse(ch)
                                 self.pkt_start_time = frame.start_time
                                 self.byte_cnt += 1
                                 return
@@ -163,7 +161,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                                 self.byte_cnt += 1
                                 return
                             elif (self.byte_cnt % 3) == 2:
-                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': self.pd_cap_msg})
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': self.tmp})
                             else:
                                 msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'PDCAP parsing error'})
                         elif self.pkt_cmd == 'LSTATR':
@@ -175,6 +173,26 @@ class OSDP_Analyzer(HighLevelAnalyzer):
                                 msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'power'})
                             else:
                                 msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Unknown'})
+                        elif self.pkt_cmd == 'RAW':
+                            if self.byte_cnt == 6:
+                                reader = 'Reader Num: ' + str(ch)
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': reader})
+                            elif self.byte_cnt == 7:
+                                if ch == 0x00:
+                                    msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Format: Bit Array'})
+                                elif ch == 0x01:
+                                    msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Format: Wiegand'})
+                            elif self.byte_cnt == 8:
+                                self.tmp = ch
+                                self.pkt_start_time = frame.start_time
+                                self.byte_cnt += 1
+                                return
+                            elif self.byte_cnt == 9:
+                                self.tmp += (ch << 8)
+                                string = 'Bit Count: ' + str(self.tmp)
+                                msg = AnalyzerFrame('OSDP', self.pkt_start_time, frame.end_time, {'string': string})
+                            else:
+                                msg = AnalyzerFrame('OSDP', frame.start_time, frame.end_time, {'string': 'Data'})
 
         self.byte_cnt += 1
 
@@ -242,7 +260,7 @@ class OSDP_Analyzer(HighLevelAnalyzer):
         if cmd == 0x90:  return 'MFGREP'        # Manufacturer Specific Reply (Any)
         if cmd == 0xB1:  return 'XRD'           # Extended Read Response (APDU and details)
         return 'Unknown'
-    
+
 
     def PDCAPparse(self, fn_code):
         if fn_code == 1:  return 'Contact Status Monitoring'
